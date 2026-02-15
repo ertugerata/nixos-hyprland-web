@@ -1,5 +1,5 @@
 {
-  description = "NixOS Hyprland Headless Container";
+  description = "NixOS Hyprland Headless Container (Multi-User Fix)";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -13,24 +13,9 @@
       config.allowUnfree = true;
     };
 
-    # --- Kullanıcı Tanımları ---
-    fakePasswd = pkgs.writeTextDir "etc/passwd" ''
-      root:x:0:0::/root:/bin/bash
-      ertugrulerata:x:1000:1000::/home/ertugrulerata:/bin/bash
-    '';
-
-    fakeGroup = pkgs.writeTextDir "etc/group" ''
-      root:x:0:
-      ertugrulerata:x:1000:
-    '';
-
-    fakeShadow = pkgs.writeTextDir "etc/shadow" ''
-      root:!x:::::::
-      ertugrulerata:!:::::::
-    '';
-
-    # --- 1. Hyprland Config Dosyası ---
-    hyprlandConf = pkgs.writeTextDir "home/ertugrulerata/.config/hypr/hyprland.conf" ''
+    # --- 1. Global Hyprland Config ---
+    # Dosyayı /root yerine /etc altına koyuyoruz ki herkes erişsin.
+    hyprlandConf = pkgs.writeTextDir "etc/hypr/hyprland.conf" ''
       # --- EKRAN ---
       monitor=HEADLESS-1,1920x1080@60,0x0,1
 
@@ -59,23 +44,39 @@
       animations {
         enabled = false
       }
+
+      # Software Rendering için gerekli env düzeltmeleri
+      env = WLR_NO_HARDWARE_CURSORS,1
     '';
 
-    # --- 2. Başlangıç Scripti ---
+    # --- 2. Akıllı Başlangıç Scripti ---
     entrypoint = pkgs.writeScriptBin "entrypoint" ''
       #!${pkgs.runtimeShell}
       
-      # Runtime klasörlerini hazırla
-      mkdir -p /tmp/runtime-dir
-      chmod 0700 /tmp/runtime-dir
+      # Şu anki kullanıcıyı bul
+      CURRENT_USER=$(whoami)
+      USER_HOME=$(eval echo ~$CURRENT_USER)
+
+      echo "Starting as user: $CURRENT_USER (Home: $USER_HOME)"
+
+      # Runtime klasörünü hazırla
+      export XDG_RUNTIME_DIR=/tmp/runtime-dir
+      mkdir -p $XDG_RUNTIME_DIR
+      chmod 0700 $XDG_RUNTIME_DIR
       
-      # Cache klasörünü hazırla (Crash report hatasını çözer)
-      mkdir -p /home/ertugrulerata/.cache/hypr
+      # Crash raporları için cache klasörünü oluştur (Hata buradaydı)
+      mkdir -p $USER_HOME/.cache/hypr
       
-      echo "Starting Hyprland in Headless Mode (Software Rendering)..."
+      # Hyprland Config klasörünü oluştur (Gerekirse)
+      mkdir -p $USER_HOME/.config/hypr
+
+      echo "Launching Hyprland with Global Headless Config..."
       
-      # Hyprland'i başlat (Zaten kullanıcı olarak çalışıyoruz)
-      exec ${pkgs.hyprland}/bin/Hyprland --i-am-really-stupid
+      # KRİTİK NOKTA: --config parametresi ile bizim dosyamızı zorluyoruz.
+      # Böylece kullanıcının ev dizinindeki (boş veya hatalı) config yerine bunu kullanıyor.
+      exec ${pkgs.hyprland}/bin/Hyprland \
+        --config /etc/hypr/hyprland.conf \
+        --i-am-really-stupid
     '';
 
   in {
@@ -84,10 +85,7 @@
       tag = "latest";
       
       contents = [
-        fakePasswd
-        fakeGroup
-        fakeShadow
-        hyprlandConf
+        hyprlandConf # Config artık /etc/hypr/hyprland.conf yolunda
         pkgs.bash
         pkgs.coreutils
         pkgs.curl
@@ -98,42 +96,29 @@
         pkgs.google-chrome
         pkgs.kitty
         
-        # --- KRİTİK EKLEMELER (Software Rendering İçin) ---
+        # Grafik Sürücüleri
         pkgs.mesa
         pkgs.mesa.drivers
         pkgs.libglvnd
         entrypoint
       ];
 
-      # İmaj oluşturulurken çalışacak komutlar (fakeroot içinde çalışır)
-      fakeRootCommands = ''
-        mkdir -p tmp
-        chmod 1777 tmp
-        mkdir -p home/ertugrulerata
-        chown 1000:1000 home/ertugrulerata
-      '';
-
       config = {
         Cmd = [ "${entrypoint}/bin/entrypoint" ];
-        User = "ertugrulerata";
         ExposedPorts = {
           "6080/tcp" = {};
         };
-        # Environment Değişkenleri
         Env = [
-          # Wayland Ayarları
           "XDG_RUNTIME_DIR=/tmp/runtime-dir"
           "WLR_BACKENDS=headless"
           "WLR_LIBINPUT_NO_DEVICES=1"
           "WLR_RENDERER_ALLOW_SOFTWARE=1"
+          "LIBGL_ALWAYS_SOFTWARE=1"
+          "MESA_LOADER_DRIVER_OVERRIDE=llvmpipe"
           
-          # --- KRİTİK EKRAN KARTI AYARLARI ---
-          "LIBGL_ALWAYS_SOFTWARE=1"            # OpenGL'i CPU'da çalışmaya zorla
-          "MESA_LOADER_DRIVER_OVERRIDE=llvmpipe" # Mesa sürücüsü olarak llvmpipe (CPU) kullan
-          
-          # Diğer
-          "HOME=/home/ertugrulerata"
-          "XDG_CACHE_HOME=/home/ertugrulerata/.cache"
+          # Driver fix:
+          "LIBGL_DRIVERS_PATH=${pkgs.mesa.drivers}/lib/dri"
+          "LD_LIBRARY_PATH=${pkgs.libglvnd}/lib:${pkgs.mesa.drivers}/lib:${pkgs.mesa}/lib"
         ];
       };
     };
