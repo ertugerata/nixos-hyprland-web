@@ -105,8 +105,8 @@
         entrypoint
       ];
 
-      # İmaj oluşturulurken çalışacak komutlar
-      extraCommands = ''
+      # İmaj oluşturulurken çalışacak komutlar (fakeroot içinde çalışır)
+      fakeRootCommands = ''
         mkdir -p tmp
         chmod 1777 tmp
         mkdir -p home/ertugrulerata
