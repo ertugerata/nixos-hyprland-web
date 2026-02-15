@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        system:
+          - x86_64-linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/determinate-nix-action@v3
+
+      - name: Build Docker Image
+        run: nix build .#packages.${{ matrix.system }}.dockerImage
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir -p artifacts
+          # verify result is a file
+          if [ -f result ]; then
+            cp -L result artifacts/nixos-hyprland-web-${{ matrix.system }}.tar.gz
+          else
+            echo "Result is not a file, copying as directory"
+            cp -rL result artifacts/nixos-hyprland-web-${{ matrix.system }}
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nixos-hyprland-web-${{ matrix.system }}
+          path: artifacts/*
