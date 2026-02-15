@@ -1,0 +1,1 @@
+# nixos-hyprland-web
