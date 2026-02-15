@@ -35,6 +35,11 @@
       bindm = $mainMod, mouse:272, movewindow
       bindm = $mainMod, mouse:273, resizewindow
       
+      misc {
+        disable_hyprland_logo = true
+        disable_splash_rendering = true
+      }
+      
       animations {
         enabled = false
       }
@@ -45,14 +50,15 @@
       #!${pkgs.runtimeShell}
       
       # Runtime klasörlerini hazırla
-      # (Docker içinde /tmp bazen temiz gelir, bu yüzden garantiye alıyoruz)
       mkdir -p /tmp/runtime-dir
       chmod 0700 /tmp/runtime-dir
       
-      echo "Hyprland Headless (Root Modu) Başlatılıyor..."
+      # Cache klasörünü hazırla (Crash report hatasını çözer)
+      mkdir -p /root/.cache/hypr
       
-      # KRİTİK DÜZELTME BURADA:
-      # --i-am-really-stupid flag'i root ile çalışmaya izin verir.
+      echo "Starting Hyprland in Headless Mode (Software Rendering)..."
+      
+      # Hyprland'i root olarak başlat
       exec ${pkgs.hyprland}/bin/Hyprland --i-am-really-stupid
     '';
 
@@ -72,6 +78,11 @@
         pkgs.novnc
         pkgs.google-chrome
         pkgs.kitty
+        
+        # --- KRİTİK EKLEMELER (Software Rendering İçin) ---
+        pkgs.mesa
+        pkgs.mesa.drivers
+        pkgs.libglvnd
         entrypoint
       ];
 
@@ -80,13 +91,21 @@
         ExposedPorts = {
           "6080/tcp" = {};
         };
-        # Environment Değişkenleri (Artık global olarak tanımlı)
+        # Environment Değişkenleri
         Env = [
+          # Wayland Ayarları
           "XDG_RUNTIME_DIR=/tmp/runtime-dir"
           "WLR_BACKENDS=headless"
           "WLR_LIBINPUT_NO_DEVICES=1"
           "WLR_RENDERER_ALLOW_SOFTWARE=1"
+          
+          # --- KRİTİK EKRAN KARTI AYARLARI ---
+          "LIBGL_ALWAYS_SOFTWARE=1"            # OpenGL'i CPU'da çalışmaya zorla
+          "MESA_LOADER_DRIVER_OVERRIDE=llvmpipe" # Mesa sürücüsü olarak llvmpipe (CPU) kullan
+          
+          # Diğer
           "HOME=/root"
+          "XDG_CACHE_HOME=/root/.cache"
         ];
       };
     };
