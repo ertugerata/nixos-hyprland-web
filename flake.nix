@@ -13,8 +13,24 @@
       config.allowUnfree = true;
     };
 
+    # --- Kullanıcı Tanımları ---
+    fakePasswd = pkgs.writeTextDir "etc/passwd" ''
+      root:x:0:0::/root:/bin/bash
+      ertugrulerata:x:1000:1000::/home/ertugrulerata:/bin/bash
+    '';
+
+    fakeGroup = pkgs.writeTextDir "etc/group" ''
+      root:x:0:
+      ertugrulerata:x:1000:
+    '';
+
+    fakeShadow = pkgs.writeTextDir "etc/shadow" ''
+      root:!x:::::::
+      ertugrulerata:!:::::::
+    '';
+
     # --- 1. Hyprland Config Dosyası ---
-    hyprlandConf = pkgs.writeTextDir "root/.config/hypr/hyprland.conf" ''
+    hyprlandConf = pkgs.writeTextDir "home/ertugrulerata/.config/hypr/hyprland.conf" ''
       # --- EKRAN ---
       monitor=HEADLESS-1,1920x1080@60,0x0,1
 
@@ -54,11 +70,11 @@
       chmod 0700 /tmp/runtime-dir
       
       # Cache klasörünü hazırla (Crash report hatasını çözer)
-      mkdir -p /root/.cache/hypr
+      mkdir -p /home/ertugrulerata/.cache/hypr
       
       echo "Starting Hyprland in Headless Mode (Software Rendering)..."
       
-      # Hyprland'i root olarak başlat
+      # Hyprland'i başlat (Zaten kullanıcı olarak çalışıyoruz)
       exec ${pkgs.hyprland}/bin/Hyprland --i-am-really-stupid
     '';
 
@@ -68,6 +84,9 @@
       tag = "latest";
       
       contents = [
+        fakePasswd
+        fakeGroup
+        fakeShadow
         hyprlandConf
         pkgs.bash
         pkgs.coreutils
@@ -86,8 +105,17 @@
         entrypoint
       ];
 
+      # İmaj oluşturulurken çalışacak komutlar
+      extraCommands = ''
+        mkdir -p tmp
+        chmod 1777 tmp
+        mkdir -p home/ertugrulerata
+        chown 1000:1000 home/ertugrulerata
+      '';
+
       config = {
         Cmd = [ "${entrypoint}/bin/entrypoint" ];
+        User = "ertugrulerata";
         ExposedPorts = {
           "6080/tcp" = {};
         };
@@ -104,8 +132,8 @@
           "MESA_LOADER_DRIVER_OVERRIDE=llvmpipe" # Mesa sürücüsü olarak llvmpipe (CPU) kullan
           
           # Diğer
-          "HOME=/root"
-          "XDG_CACHE_HOME=/root/.cache"
+          "HOME=/home/ertugrulerata"
+          "XDG_CACHE_HOME=/home/ertugrulerata/.cache"
         ];
       };
     };
