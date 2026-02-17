@@ -24,6 +24,11 @@
     # Extract the entrypoint script
     entrypoint = sysConfig.system.build.entrypoint;
 
+    # Create a derivation for the home directory structure
+    homeDir = sysPkgs.runCommand "home-dir" {} ''
+      mkdir -p $out/home/nixos
+    '';
+
   in {
     packages.${system}.dockerImage = sysPkgs.dockerTools.buildLayeredImage {
       name = "nixos-hyprland-web";
@@ -32,11 +37,11 @@
       # Include system packages and the /etc tree in the image
       contents = sysConfig.environment.systemPackages ++ [
         sysConfig.system.build.etc
+        homeDir
       ];
 
       # Prepare home directory for the user defined in configuration.nix
       fakeRootCommands = ''
-        mkdir -p /home/nixos
         chown ${toString sysConfig.users.users.nixos.uid}:100 /home/nixos
         chmod 700 /home/nixos
       '';
