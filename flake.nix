@@ -100,6 +100,9 @@
         pkgs.mesa
         pkgs.mesa.drivers
         pkgs.libglvnd
+        pkgs.libdrm
+        pkgs.libxkbcommon
+        pkgs.wayland
         entrypoint
       ];
 
@@ -113,12 +116,13 @@
           "WLR_BACKENDS=headless"
           "WLR_LIBINPUT_NO_DEVICES=1"
           "WLR_RENDERER_ALLOW_SOFTWARE=1"
+          "WLR_RENDERER=gles2"
           "LIBGL_ALWAYS_SOFTWARE=1"
           "MESA_LOADER_DRIVER_OVERRIDE=llvmpipe"
           
           # Driver fix:
           "LIBGL_DRIVERS_PATH=${pkgs.mesa.drivers}/lib/dri"
-          "LD_LIBRARY_PATH=${pkgs.libglvnd}/lib:${pkgs.mesa.drivers}/lib:${pkgs.mesa}/lib"
+          "LD_LIBRARY_PATH=${pkgs.libglvnd}/lib:${pkgs.mesa.drivers}/lib:${pkgs.mesa}/lib:${pkgs.libdrm}/lib:${pkgs.libxkbcommon}/lib:${pkgs.wayland}/lib"
         ];
       };
     };
