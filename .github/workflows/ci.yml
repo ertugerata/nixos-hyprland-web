@@ -1,40 +1,39 @@
-name: CI
-
 on:
+  pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main
-      - master
-  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  nixos-ci:
     strategy:
+      fail-fast: false
       matrix:
-        system:
-          - x86_64-linux
-    runs-on: ubuntu-latest
+        include:
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+          - runner: ubuntu-24.04
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: DeterminateSystems/determinate-nix-action@v3
-
-      - name: Build Docker Image
-        run: nix build .#packages.${{ matrix.system }}.dockerImage
-
-      - name: Prepare Artifacts
-        run: |
-          mkdir -p artifacts
-          # verify result is a file
-          if [ -f result ]; then
-            cp -L result artifacts/nixos-hyprland-web-${{ matrix.system }}.tar.gz
-          else
-            echo "Result is not a file, copying as directory"
-            cp -rL result artifacts/nixos-hyprland-web-${{ matrix.system }}
-          fi
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
         with:
-          name: nixos-hyprland-web-${{ matrix.system }}
-          path: artifacts/*
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@1d699fc25db3f9e079cd2f168ca007a4183389be  # v3.15.1
+      - uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6  # v12
+
+      - run: nix flake check
+      - run: nix build .#baguette-zimage
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
+        with:
+          name: zimage-${{ matrix.arch }}
+          path: result/*.zst
